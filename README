@@ -1,0 +1,30 @@
+========================================================= POLITIC ANDREI - BOGDAN =========================================================
+================================================================== 325CD ==================================================================
+
+================================================= DETALII DESPRE IMPLEMENTAREA TEMEI 2 PC =================================================
+
+	Am implementat doar partea de conexiune TCP din tema. Afisarea am facut-o atat in fisierul log, cat si in consola.
+	Descrierea functiilor si structurilor folosite:
+		~ fisierul client.c :
+			-> initstatus - initializeaza statusul de logare (cont logat sau nelogat)
+			-> error - functie de afisare a unei posibile erori insotite de mesajul dat ca parametru
+			-> errortolog - afiseaza codurile erorilor insotite de mesajele aferente, atat in fisierul log cat si in consola
+			-> equal - verifica daca doua string-uri (primite ca parametru) sunt egale sau nu
+			-> length - stabileste lungimea corecta a unui mesaj, in caz de posibile erori aparute la nivel de transmisie
+			-> no7f - corecteaza mesajul, asa incat sa se conformeze cerintei la afisare
+		~ fisierul server.c :
+			-> struct data - lista de caracteristici pentru fiecare cont bancar din baza de date
+			-> struct database - structura ce reprezinta baza de date. Are 2 campuri:
+				-> records - care este un vector de inregistrari (fiecare inregistrare e un cont bancar)
+				-> len - numarul de conturi stocate in baza de date
+			-> writeinstruct - functie care realizeaza parsarea de informatie din stream-ul primit in fisierul al carui nume este dat ca parametru, intr-o structura de tip baza de date (struct database), adica un vector de inregistrari
+			-> commandname - returneaza numele corect al comenzii date ca parametru, corectand anumite nereguli (cum ar fi linia noua de la sfarsitul comenzii - o sterge)
+			-> whichcommand - primeste ca parametru comanda, si ii asigneaza un cod unic (un integer intre 1 si 7), pentru a putea fi folosita mai departe intr-o structura de tipul switch case, fiecare caz reprezentand executia unei comenzi anume, date de utilizator (client)
+
+	Rationamentul folosit:
+
+		Pentru inceput, am implementat conceptul de baza pentru transmisia TCP/IP. Clientul mai intai stocheaza adresa socket-ului asociat intr-o variabila de tip sockaddr_in. Adresa serverului este data de functia gethostbyname. Functia connect realizeaza conexiunea intre socket-ul clientului si cel al server-ului. Server-ul prima oara isi defineste vectorul de liste de descriptori. Pentru primire si trimitere de mesaje, se folosesc descriptorii din lista read_fds. Dupa ce comunicatia de termina (la sfarsitul programului), se inchid acesti descriptori.
+		Rationamentul efectiv este urmatorul : pentru simplitatea implementarii, am luat un vector pentru fiecare comanda data de client, cu lungimea aferenta comenzii. In acestia se stocheaza doar comanda, nu si parametrii. Am folosit buffer-ul numit buffer pentru a stoca intreaga comanda, aceasta citindu-se in el (cu functia fgets). Am lucrat cu toate cazurile, in structuri if / else if. Am lucrat in general cu string-uri, cu functii de manipulare a acestora, si cu functii de conversie din string in int / double (atoi, atof) si invers (sprintf). La server transmit deseori parametri aditionali, care folosesc la procesarea informatiei si returnarea rezultatului inapoi in client, unde din nou este prelucrat si (in unele cazuri) din nou trimis la server pentru luarea diverselor decizii (precum rezolvarea erorilor si returnarea de exceptii). Doi dintre parametrii transmisi cei mai des in comunicarea cu serverul sunt retinuti inca de la login, in string-ul correctcredentials, care retine numarul de card si parola respectiva, in cazul in care acea logare a reusit. Acestea folosesc la identificarea contului bancar in baza de date, de aceea trebuiesc retinute pe tot parcursul executiei comenzilor.
+		In cazul server-ului, se initiaza cu socket inactiv, ocupat cu supervizarea noilor conexiuni, carora le da accept si le adauga in lista de descriptori de citire (ca socketi). Se itereaza mereu in acea lista (la fiecare comanda), asa incat variabila de iteratie i retine socketul curent pe care s-a primit informatia de la un anumit client. De aceea, operatiile de send si recv se efectueaza mereu avand ca prim parametru pe i, reprezentand de la care primesc / la care trebuie sa trimit.String-urile pe care clientii le trimit au de obicei ca prim cuvant numele comenzii, pe care functia whichcommand il selecteaza pentru a returna in argumentul structurii switch case, codul unic asociat fiecarei comenzi, urmand ca executia sa se duca pe acel fir de executie din switch. Exceptie de comanda face codul CONFIRMTRANSFER (cu valoarea 7) care realizeaza mai intai decizia intre a trimite o eroare catre client in cazul in care destinatarul nu a fost referit corect, sau bugetul de transmis este mai mare decat bugetul detinut. Daca nu returneaza erori, atunci clientul 'apeleaza' apoi cazul TRANSFER (cu valoarea 4), unde se realizeaza transferul efectiv. Daca s-a dat eroare sau nu, se retine in variabila errorgiven. Daca clientul este logat intr-un cont sau nu, se specifica in variabila logged din cadrul structurii struct data. Daca clientul este blocat sau nu, si la a cata abatere de scriere gresita a login-ului se afla curent, se retine in variabila blocked din cadrul structurii data, care ia valori de la 1 la 3 (cand ajunge la 3, contul se considera a fi blocat).
+
+
